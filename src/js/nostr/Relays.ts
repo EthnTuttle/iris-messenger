@@ -18,18 +18,9 @@ type SavedRelays = {
 
 let savedRelays: SavedRelays = {};
 
-const DEFAULT_RELAYS = [
-  'wss://eden.nostr.land',
-  'wss://nostr.fmt.wiz.biz',
-  'wss://relay.damus.io',
-  'wss://nostr-pub.wellorder.net',
-  'wss://offchain.pub',
-  'wss://nos.lol',
-  'wss://relay.snort.social',
-  'wss://relay.current.fyi',
-];
+const DEFAULT_RELAYS: RelayMetadata = { enabled: true, url: 'wss://192.168.12.244' };
 
-const SEARCH_RELAYS = ['wss://relay.nostr.band'];
+const SEARCH_RELAYS = ['wss://192.168.12.244'];
 
 type PublicRelaySettings = {
   read: boolean;
@@ -46,7 +37,7 @@ export type PopularRelay = {
  * Relay management and subscriptions. Bundles subscriptions in to max 10 larger batches.
  */
 const Relays = {
-  relays: new Map<string, RelayMetadata>(),
+  relays: DEFAULT_RELAYS,
   searchRelays: new Map<string, RelayMetadata>(),
   writeRelaysByUser: new Map<string, Set<string>>(),
   filtersBySubscriptionName: new Map<string, string>(),
@@ -57,14 +48,12 @@ const Relays = {
   newAuthors: new Set<string>(),
   DEFAULT_RELAYS,
   init() {
-    this.relays = new Map(DEFAULT_RELAYS.map((url) => [url, { enabled: true, url }]));
+    this.relays = DEFAULT_RELAYS;
     this.searchRelays = new Map(SEARCH_RELAYS.map((url) => [url, { enabled: true, url }]));
     this.manage();
   },
-  enabledRelays(relays?: Map<string, RelayMetadata>) {
-    return Array.from((relays || this.relays).values())
-      .filter((v) => v.enabled)
-      .map((v) => v.url);
+  enabledRelays(relays?: RelayMetadata) {
+    return relays;
   },
   getSubscriptionIdForName(name: string) {
     return Helpers.arrayToHex(sha256(name)).slice(0, 8);
@@ -112,20 +101,18 @@ const Relays = {
       }
     });
     const sorted = Array.from(relays.entries())
-      .filter(([url]) => !this.relays.has(url))
+      .filter(([url]) => this.relays.url == url)
       .sort((a, b) => b[1] - a[1]);
     return sorted.map((entry) => {
       return { url: entry[0], users: entry[1] };
     });
   },
-  getConnectedRelayCount: function () {
-    let count = 0;
-    for (const url of this.relays.keys()) {
-      if (PubSub.relayPool.relayByUrl.get(url)?.status === 1) {
-        count++;
-      }
+  getConnectedRelayCount: function (): number {
+    const { url } = this.relays;
+    if (PubSub.relayPool.relayByUrl.get(url)?.status === 1) {
+      return 1;
     }
-    return count;
+    return 0;
   },
   getUserRelays(user: string): Array<[string, PublicRelaySettings]> {
     let relays = new Map<string, PublicRelaySettings>();
@@ -146,26 +133,25 @@ const Relays = {
         return;
       }
       savedRelays = r;
-      for (const url of this.relays.keys()) {
-        if (savedRelays[url] === null) {
-          this.remove(url);
-        } else if (savedRelays[url] && savedRelays[url].enabled === false) {
-          const r = this.relays.get(url);
-          if (r) {
-            r.enabled = false;
-            this.relays.set(url, r);
-            PubSub.relayPool.removeRelay(url);
-          }
+      const { url } = this.relays;
+      if (savedRelays[url] === null) {
+        this.remove(url);
+      } else if (savedRelays[url] && savedRelays[url].enabled === false) {
+        const r = this.relays;
+        if (r) {
+          r.enabled = false;
+          this.relays = r;
+          PubSub.relayPool.removeRelay(url);
         }
       }
       for (const [url, data] of Object.entries(savedRelays)) {
         if (!data) {
-          this.relays.has(url) && this.remove(url);
+          this.relays && this.remove(url);
           continue;
-        } else if (!this.relays.has(url)) {
+        } else if (!this.relays.url) {
           // `data` was missing `url` here, and those objects would be stored.
           // So this is backward compat.
-          this.relays.set(url, { url, enabled: !!data.enabled });
+          this.relays.enabled = !!data.enabled;
           if (data.enabled) {
             PubSub.relayPool.addOrGetRelay(url);
           }
@@ -174,9 +160,9 @@ const Relays = {
     });
   },
   add(url: string) {
-    if (this.relays.has(url)) return;
+    if (this.relays.url === url) return;
     const relay = { enabled: true, url };
-    this.relays.set(url, relay);
+    this.relays = relay;
     PubSub.relayPool.addOrGetRelay(url);
   },
   remove(url: string) {
@@ -185,43 +171,36 @@ const Relays = {
     } catch (e) {
       console.log('error closing relay', e);
     }
-    this.relays.delete(url);
+    this.relays = {} as RelayMetadata;
   },
   disable(url: string) {
-    if (!this.relays.has(url)) {
+    if (!(this.relays.url === url)) {
       return;
     }
-    this.relays.set(url, { enabled: false, url });
+    this.relays.enabled = false;
     PubSub.relayPool.removeRelay(url);
   },
   enable(url: string) {
-    if (!this.relays.has(url)) {
+    if (!(this.relays.url === url)) {
       return;
     }
     this.relays.set(url, { enabled: true, url });
     PubSub.relayPool.addOrGetRelay(url);
   },
   restoreDefaults() {
-    this.relays.clear();
-    for (const url of DEFAULT_RELAYS) {
-      this.add(url);
-    }
+    this.relays = DEFAULT_RELAYS;
     this.saveToContacts();
     // do not save these to contact list
     for (const url of SEARCH_RELAYS) {
-      if (!this.relays.has(url)) this.add(url);
+      if (!(this.relays.url === url)) this.add(url);
     }
     const relaysObj = {};
-    for (const [url, relay] of this.relays.entries()) {
-      relaysObj[url] = { enabled: relay.enabled, url };
-    }
+    this.relays.enabled = true;
     localState.get('relays').put(relaysObj);
   },
   saveToContacts() {
     const relaysObj: any = {};
-    for (const url of this.relays.keys()) {
-      relaysObj[url] = { read: true, write: true };
-    }
+    relaysObj[this.relays.url] = { read: true, write: true };
     const existing = Events.db.findOne({ kind: 3, pubkey: Key.getPubKey() });
     const content = JSON.stringify(relaysObj);
 

@@ -299,25 +299,13 @@ export default {
 
     const profile = this.profiles.get(id);
     // TODO subscribe & callback
-    if (profile) {
-      callback();
-      if (verifyNip05 && profile.nip05 && !profile.nip05valid) {
-        Key.verifyNip05Address(profile.nip05, address).then((isValid) => {
-          console.log('NIP05 address is valid?', isValid, profile.nip05, address);
-          profile.nip05valid = isValid;
-          this.profiles.set(id, profile);
-          callback();
-        });
-      }
-    } else {
-      fetch(`https://api.iris.to/profile/${address}`).then((res) => {
-        if (res.status === 200) {
-          res.json().then((profile) => {
-            // TODO verify sig
-            Events.handle(profile);
-            callback();
-          });
-        }
+    callback();
+    if (verifyNip05 && profile.nip05 && !profile.nip05valid) {
+      Key.verifyNip05Address(profile.nip05, address).then((isValid) => {
+        console.log('NIP05 address is valid?', isValid, profile.nip05, address);
+        profile.nip05valid = isValid;
+        this.profiles.set(id, profile);
+        callback();
       });
     }
     return PubSub.subscribe({ kinds: [0], authors: [address] }, callback, false);

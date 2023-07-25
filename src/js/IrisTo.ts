@@ -5,6 +5,7 @@ import localState from './LocalState';
 
 export default {
   async checkExistingAccount(pub) {
+    return;
     if (!['iris.to', 'beta.iris.to', 'localhost'].includes(window.location.hostname)) {
       return;
     }
@@ -53,6 +54,7 @@ export default {
   },
 
   async enableReserved(name) {
+    return;
     const pubkey = Key.getPubKey();
     const event: any = {
       content: `iris.to/${name}`,
@@ -89,6 +91,7 @@ export default {
   },
 
   async declineReserved(name) {
+    return;
     if (!confirm(`Are you sure you want to decline iris.to/${name}?`)) {
       return;
     }
