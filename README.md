@@ -1,3 +1,8 @@
+# THIS REPO IS A SINGLE RELAY ONLY CLIENT
+
+I'm working on this because I want to run a relay at an event and have people download this client and then only connect to the LAN relay over wifi. The nostr relay will run connected to the wifi device and provide the database. Perhaps even a Primal cache.
+
+
 ![git_banner_1200x200](https://user-images.githubusercontent.com/52623440/226903633-7902aa21-6041-4bad-979a-dc98bd0ad317.png)
 <div align="center">
 
